@@ -20,9 +20,9 @@ const Post = db.define("Post", {
 });
 
 Post.associate = (models) => {
-  Post.belongsTo(models.User);
-  Post.hasMany(models.Post_Image);
-  Post.hasMany(models.Comment);
+  Post.belongsTo(models.User);// this will add userId to Post model
+  Post.hasMany(models.Post_Image); // this will add postId to Post_Image model
+  Post.hasMany(models.Comment); // this will add postId to Comment model
 };
 
 export default Post;
