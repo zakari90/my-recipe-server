@@ -1,0 +1,162 @@
+import fs from "node:fs/promises";
+import models from "../models/index.js";
+
+export async function newPost(req, res) {
+  const { title, contents, steps, country, region } = req.body;
+  try {
+    const post = await models.Post.create({
+      title,
+      contents,
+      steps,
+      country,
+      region,
+      UserId: req.currentUser.id,
+    });
+    req.files.map(async (file) => {
+      await models.Post_Image.create({
+        img_uri: `/public/images/${file.filename}`,
+        PostId: post.id,
+      });
+    });
+    res.status(200).json({ message: "تم إضافة منشور جديد" });
+  }
+  catch (e) {
+    res.status(500).json(e);
+  }
+}
+
+export async function getAllPosts(req, res) {
+  try {
+    const getPosts = await models.Post.findAll({
+      include: [
+        {
+          model: models.User,
+          attributes: { exclude: ["password", "email"] },
+        },
+        {
+          model: models.Post_Image, // how will include all images related to the post
+        },
+      ],
+    });
+    res.status(200).json(getPosts);
+  }
+  catch (e) {
+    res.status(500).json(e);
+  }
+}
+
+export async function getPost(req, res) {
+  try {
+    const post = await models.Post.findOne({
+      where: { id: req.params.postId },
+      include: [
+        {
+          model: models.User,
+          attributes: { exclude: ["password", "email"] },
+        },
+        {
+          model: models.Post_Image,
+        },
+      ],
+    });
+    res.status(200).json(post);
+  }
+  catch (e) {
+    res.status(500).json(e);
+  }
+}
+
+export async function getAllMyPosts(req, res) {
+  try {
+    const myPosts = await models.Post.findAll({
+      where: { UserId: req.currentUser.id },
+      include: [
+        {
+          model: models.Post_Image,
+        },
+      ],
+    });
+    res.status(200).json(myPosts);
+  }
+  catch (e) {
+    res.status(500).json(e);
+  }
+}
+
+export async function getMyPost(req, res) {
+  try {
+    const myPost = await models.Post.findOne({
+      where: {
+        UserId: req.currentUser.id,
+        id: req.params.postId,
+      },
+    });
+    res.status(200).json(myPost);
+  }
+  catch (e) {
+    res.status(500).json(e);
+  }
+}
+
+export async function updateMyPost(req, res) {
+  const { title, contents, steps } = req.body;
+  try {
+    await models.Post.update(
+      {
+        title,
+        contents,
+        steps,
+      },
+      {
+        where: {
+          id: req.params.postId,
+          UserId: req.currentUser.id,
+        },
+      },
+    );
+    res.status(200).json({
+      message: "تم التعديل على بيانات المنشور",
+    });
+  }
+  catch (e) {
+    res.status(500).json(e);
+  }
+}
+
+export async function deleteMyPost(req, res) {
+  const { postId } = req.body;
+  try {
+    const images = await models.Post_Image.findAll({ where: { PostId: postId } });
+    await Promise.all(
+      images.map(img => fs.unlink(`.${img.img_uri}`)),
+    );
+
+    // await models.Post_Image.findAll({
+    //   where: { PostId: postId },
+    // }).then((res) => {
+    //   res.forEach((img) => {
+    //     fs.unlink(`.${img.img_uri}`, (err) => {
+    //       if (err)
+    //         throw err;
+    //     });
+    //   });
+    // });
+    await models.Post_Image.destroy({
+      where: { PostId: postId },
+    });
+    await models.Comment.destroy({
+      where: { PostId: postId },
+    });
+    await models.Like.destroy({
+      where: { PostId: postId },
+    });
+    await models.Post.destroy({
+      where: { id: postId, UserId: req.currentUser.id },
+    });
+    res.status(200).json({ message: "تم حذف منشورك" });
+  }
+  catch (e) {
+    console.warn(e);
+    res.status(500).json(e);
+  }
+}
